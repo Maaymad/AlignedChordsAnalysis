@@ -133,20 +133,20 @@ def save_results_to_csv(results, output_csv_path):
     with open(output_csv_path, mode="w", newline="") as csv_file:
         writer = csv.writer(csv_file)
         # Write header row
-        writer.writerow(["File Name"] + TARGET_WORDS)
+        writer.writerow(["File Name", "Word Count"] + TARGET_WORDS)
 
-        # Write rows for each file
-        for file_name, word_order in results.items():
-            row = [file_name]
+        # Write rows for each file, sorted by file name
+        for file_name in sorted(results.keys()):  # Sort file names alphabetically
+            word_order = results[file_name]
+            # Calculate the sum of unique words said
+            unique_word_count = len(set(word_order))  # Count unique words in the word_order list
+
+            row = [file_name, unique_word_count]  # Start the row with file_name and unique_word_count
             for word in TARGET_WORDS:
                 # Find all occurrences of the word and their positions
                 positions = [i + 1 for i, w in enumerate(word_order) if w == word]
                 row.append(", ".join(map(str, positions)) if positions else "")
             
-            # Add a column for the sum of unique words said
-            unique_word_count = len(set(word_order))  # Count unique words in the word_order list
-            row.append(unique_word_count)
-
             writer.writerow(row)
 
 def main():
