@@ -131,9 +131,10 @@ def save_results_to_csv(results, output_csv_path):
     Saves the transcription results to a CSV file.
     """
     with open(output_csv_path, mode="w", newline="") as csv_file:
+        condition = "silence"
         writer = csv.writer(csv_file)
         # Write header row
-        writer.writerow(["File Name", "Word Count"] + TARGET_WORDS)
+        writer.writerow(["File Name", "Word Count", "Condition"] + TARGET_WORDS)
 
         # Write rows for each file, sorted by file name
         for file_name in sorted(results.keys()):  # Sort file names alphabetically
@@ -141,7 +142,7 @@ def save_results_to_csv(results, output_csv_path):
             # Calculate the sum of unique words said
             unique_word_count = len(set(word_order))  # Count unique words in the word_order list
 
-            row = [file_name, unique_word_count]  # Start the row with file_name and unique_word_count
+            row = [file_name, unique_word_count, condition]  # Add condition after unique_word_count
             for word in TARGET_WORDS:
                 # Find all occurrences of the word and their positions
                 positions = [i + 1 for i, w in enumerate(word_order) if w == word]
