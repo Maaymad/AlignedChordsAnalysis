@@ -154,7 +154,7 @@ def process_subject(temp_folder, output_csv_path, condition):
     results = process_folder(temp_folder)  # Use your existing process_folder function
     save_results_to_csv(results, output_csv_path, condition)  # Save results with condition
 
-def handle_subjects(base_path, folders, output_csv_path):
+def handle_subjects(base_path, folders, output_csv_path, condition):
     """
     Processes all subjects and exports their data into a single CSV file.
     """
@@ -169,7 +169,7 @@ def handle_subjects(base_path, folders, output_csv_path):
     with open(output_csv_path, mode="w", newline="") as csv_file:
         writer = csv.writer(csv_file)
         # Write header row
-        writer.writerow(["Subject Index", "File Name", "Word Count", "Condition"] + TARGET_WORDS)
+        writer.writerow(["File Name", "Trial Number", "Word Count", "Condition"] + TARGET_WORDS)
 
         # Process each subject ID individually
         for subject_index, subject_id in enumerate(sorted(all_subject_ids), start=1):  # Enumerate subjects with an index
@@ -178,6 +178,7 @@ def handle_subjects(base_path, folders, output_csv_path):
                 os.makedirs(temp_folder)
 
             # Collect files for the current subject ID from all sil and mus folders
+            trial_number = 1  # Initialize trial number for the subject
             for folder in folders:
                 folder_name = os.path.basename(folder)  # Get the name of the original folder
                 for file_name in os.listdir(folder):
@@ -190,9 +191,6 @@ def handle_subjects(base_path, folders, output_csv_path):
                             destination_path = os.path.join(temp_folder, new_file_name)
                             shutil.copy(source_path, destination_path)
 
-            # Define the condition for the subject (e.g., "silence" or "music")
-            condition = "silence" if any("sil" in folder for folder in folders) else "music"
-
             # Process the files in the temp folder
             results = process_folder(temp_folder)  # Use your existing process_folder function
             # Sort by folder name and file name
@@ -203,12 +201,13 @@ def handle_subjects(base_path, folders, output_csv_path):
                 unique_word_count = len(set(word_order))  # Count unique words in the word_order list
                 # Remove file extension from the file name
                 file_name_no_ext = os.path.splitext(file_name)[0]
-                row = [subject_index, file_name_no_ext, unique_word_count, condition]
+                row = [file_name_no_ext, trial_number, unique_word_count, condition]
                 for word in TARGET_WORDS:
                     # Find all occurrences of the word and their positions
                     positions = [i + 1 for i, w in enumerate(word_order) if w == word]
                     row.append(", ".join(map(str, positions)) if positions else "")
                 writer.writerow(row)
+                trial_number += 1  # Increment trial number for each file
 
             # Clean up temporary folder
             shutil.rmtree(temp_folder)
@@ -268,6 +267,11 @@ def export_to_excel_with_colors(csv_path, excel_path):
     with open(csv_path, mode="r") as csv_file:
         rows = [line.strip().split(",") for line in csv_file]
 
+    # Check if the CSV file is empty
+    if not rows:
+        print(f"The CSV file {csv_path} is empty. No Excel file will be created.")
+        return
+
     # Create an Excel file
     workbook = xlsxwriter.Workbook(excel_path)
     worksheet = workbook.add_worksheet()
@@ -288,7 +292,7 @@ def export_to_excel_with_colors(csv_path, excel_path):
                     worksheet.write(row_index, col_index, cell)
             else:
                 # Apply lighter color to data cells based on header column name
-                header = rows[0][col_index].strip().lower()
+                header = rows[0][col_index].strip().lower() if col_index < len(rows[0]) else ""
                 color_format = data_formats.get(header, None)
                 if color_format:
                     worksheet.write(row_index, col_index, cell, color_format)
