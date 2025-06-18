@@ -1,10 +1,10 @@
 import speech_recognition as sr
-from pydub import AudioSegment
-from pydub.utils import which
 from moviepy import AudioFileClip
 import soundfile as sf
 import os
 import csv
+import shutil
+
 
 
 def convert_webm_to_wav(input_file, output_file):
@@ -48,24 +48,6 @@ def convert_audio_to_mp3(file):
     else:
         print("Unsupported file type")
 
-def process_audio_file(file_path):
-    """
-    Reads the audio file and saves it in WAV format using soundfile.
-    """
-    try:
-        # Read the audio file
-        data, samplerate = sf.read(file_path)
-
-        # Define the output path for the converted file
-        output_path = file_path.replace(".mp3", ".wav")  # Example for MP3 to WAV conversion
-        sf.write(output_path, data, samplerate)
-        print(f"Converted {file_path} to {output_path}")
-
-        # Return the path to the converted file
-        return output_path
-    except Exception as e:
-        print(f"Error processing file {file_path}: {e}")
-        return None
 
 def transcribe_audio(file_path):
     """
@@ -103,12 +85,12 @@ def process_folder(folder_path):
     results = {}
     for file_name in os.listdir(folder_path):
         # Skip non-audio files like .DS_Store
-        if not file_name.lower().endswith((".wav", ".mp3", ".aac", ".flac")):
+        if not file_name.lower().endswith((".wav", ".mp3", ".webm", ".flac")):
             print(f"Skipping non-audio file: {file_name}")
             continue
 
         file_path = os.path.join(folder_path, file_name)
-        converted_file = process_audio_file(file_path)
+        converted_file = convert_audio_to_mp3(file_path)
         if converted_file:
             try:
                 word_order = transcribe_audio(converted_file)
@@ -117,12 +99,11 @@ def process_folder(folder_path):
                 print(f"Error processing {file_name}: {e}")
     return results
 
-def save_results_to_csv(results, output_csv_path):
+def save_results_to_csv(results, output_csv_path, condition):
     """
     Saves the transcription results to a CSV file.
     """
     with open(output_csv_path, mode="w", newline="") as csv_file:
-        condition = "silence"
         writer = csv.writer(csv_file)
         # Write header row
         writer.writerow(["File Name", "Word Count", "Condition"] + TARGET_WORDS)
@@ -140,17 +121,142 @@ def save_results_to_csv(results, output_csv_path):
                 row.append(", ".join(map(str, positions)) if positions else "")
             
             writer.writerow(row)
+def extract_subject_ids(folder_path):
+    """
+    Extracts subject IDs from filenames in the given folder.
+    """
+    ids = set()
+    for file_name in os.listdir(folder_path):
+        if file_name.startswith("R_") and "_" in file_name:
+            ids.add(file_name.split("_")[1])  # Extract the ID between "R_" and the next "_"
+    return ids
+
+def copy_subject_files(subject_ids, source_folders, temp_folder):
+    """
+    Copies files matching the subject IDs from source folders to a temporary folder.
+    """
+    if not os.path.exists(temp_folder):
+        os.makedirs(temp_folder)
+
+    for folder in source_folders:
+        for file_name in os.listdir(folder):
+            if file_name.startswith("R_") and "_" in file_name:
+                file_id = file_name.split("_")[1]
+                if file_id in subject_ids:
+                    source_path = os.path.join(folder, file_name)
+                    destination_path = os.path.join(temp_folder, file_name)
+                    shutil.copy(source_path, destination_path)
+
+def process_subject(temp_folder, output_csv_path, condition):
+    """
+    Processes audio files for a subject by transcribing them and saving results to a CSV.
+    """
+    results = process_folder(temp_folder)  # Use your existing process_folder function
+    save_results_to_csv(results, output_csv_path, condition)  # Save results with condition
+
+def handle_subjects(base_path, folders, output_csv_path):
+    """
+    Processes all subjects and exports their data into a single CSV file.
+    """
+    # Extract all subject IDs from the sil folders
+    all_subject_ids = set()
+    for folder in folders:
+        all_subject_ids.update(extract_subject_ids(folder))  # Collect all unique IDs
+
+    print(f"Found {len(all_subject_ids)} unique subject IDs.")
+
+    # Prepare to write to a single CSV file
+    with open(output_csv_path, mode="w", newline="") as csv_file:
+        writer = csv.writer(csv_file)
+        # Write header row
+        writer.writerow(["Subject Index", "File Name", "Word Count", "Condition"] + TARGET_WORDS)
+
+        # Process each subject ID individually
+        for subject_index, subject_id in enumerate(sorted(all_subject_ids), start=1):  # Enumerate subjects with an index
+            temp_folder = os.path.join(base_path, "temp_subject")  # Temporary folder for subject files
+            if not os.path.exists(temp_folder):
+                os.makedirs(temp_folder)
+
+            # Collect files for the current subject ID from all sil and mus folders
+            for folder in folders:
+                folder_name = os.path.basename(folder)  # Get the name of the original folder
+                for file_name in os.listdir(folder):
+                    if file_name.startswith("R_") and "_" in file_name:
+                        file_id = file_name.split("_")[1]
+                        if file_id == subject_id:  # Match the current subject ID
+                            source_path = os.path.join(folder, file_name)
+                            # Rename the file according to the subject index and folder name
+                            new_file_name = f"sub{subject_index}_{folder_name}.webm"
+                            destination_path = os.path.join(temp_folder, new_file_name)
+                            shutil.copy(source_path, destination_path)
+
+            # Define the condition for the subject (e.g., "silence" or "music")
+            condition = "silence" if any("sil" in folder for folder in folders) else "music"
+
+            # Process the files in the temp folder
+            results = process_folder(temp_folder)  # Use your existing process_folder function
+            # Sort by folder name and file name
+            sorted_results = sorted(results.items(), key=lambda x: (x[0].split("_")[1], x[0]))
+
+            # Write results for the current subject to the CSV
+            for file_name, word_order in sorted_results:
+                unique_word_count = len(set(word_order))  # Count unique words in the word_order list
+                # Remove file extension from the file name
+                file_name_no_ext = os.path.splitext(file_name)[0]
+                row = [subject_index, file_name_no_ext, unique_word_count, condition]
+                for word in TARGET_WORDS:
+                    # Find all occurrences of the word and their positions
+                    positions = [i + 1 for i, w in enumerate(word_order) if w == word]
+                    row.append(", ".join(map(str, positions)) if positions else "")
+                writer.writerow(row)
+
+            # Clean up temporary folder
+            shutil.rmtree(temp_folder)
+
+    print(f"All subject data exported to {output_csv_path}")
+
+def join_csv_files(silence_csv_path, music_csv_path, output_csv_path):
+    """
+    Joins two CSV files into a single CSV file.
+    """
+    with open(output_csv_path, mode="w", newline="") as output_file:
+        writer = csv.writer(output_file)
+
+        # Read and write the header from the first file
+        with open(silence_csv_path, mode="r") as silence_file:
+            reader = csv.reader(silence_file)
+            header = next(reader)  # Extract the header row
+            writer.writerow(header)  # Write the header to the output file
+
+            # Write the rows from the silence file
+            for row in reader:
+                writer.writerow(row)
+
+        # Read and write the rows from the second file (music file)
+        with open(music_csv_path, mode="r") as music_file:
+            reader = csv.reader(music_file)
+            next(reader)  # Skip the header row
+            for row in reader:
+                writer.writerow(row)
+
+    print(f"Joined CSV files into {output_csv_path}")
 
 def main():
-    folder_path = "//Users//maaymadar//Downloads//list1-mismatch11-6-25"
-    if not os.path.isdir(folder_path):
-        print("Invalid folder path. Please provide a valid folder.")
-        return
+    #folder_path = "//Users//maaymadar//Downloads//list1-mismatch11-6-25"
+    base_path = "//Users//maaymadar//Downloads//2fromeach"
+    silence_csv_path = os.path.join(base_path, "silence_results.csv")
+    music_csv_path = os.path.join(base_path, "music_results.csv")
+    output_csv_path = os.path.join(base_path, "full_data.csv")
 
-    results = process_folder(folder_path)
-    output_csv_path = "//Users//maaymadar//Downloads//list1-mismatch11-6-25/subject1.csv" #input("Enter the path to save the CSV file (e.g., output.csv): ")
-    save_results_to_csv(results, output_csv_path)
-    print(f"Results saved to {output_csv_path}")
+    sil_folders = [os.path.join(base_path, folder) for folder in os.listdir(base_path) 
+               if folder.startswith("sil") and os.path.isdir(os.path.join(base_path, folder))]
+    mus_folders = [os.path.join(base_path, folder) for folder in os.listdir(base_path) 
+                if folder.startswith("mus") and os.path.isdir(os.path.join(base_path, folder))]
+
+    handle_subjects(base_path, sil_folders, silence_csv_path)
+    handle_subjects(base_path, mus_folders, music_csv_path)
+
+    join_csv_files(silence_csv_path, music_csv_path, output_csv_path)
 
 if __name__ == "__main__":
     main()
