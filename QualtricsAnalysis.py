@@ -17,11 +17,6 @@ def convert_mp3_to_wav(input_file, output_file):
     audio.write_audiofile(output_file)
     audio.close()
 
-def convert_mp4_to_wav(input_file, output_file):
-    audio = AudioFileClip(input_file)
-    audio.write_audiofile(output_file)
-    audio.close()
-
 def convert_m4a_to_wav(input_file, output_file):
     audio = AudioFileClip(input_file)
     audio.write_audiofile(output_file)
@@ -38,17 +33,13 @@ def convert_audio_to_mp3(file):
     if file.endswith(".wav"):
         return file
 
-    if file.endswith(".webm"):
+    elif file.endswith(".webm"):
         convert_webm_to_wav(file, file.replace(".webm", ".wav"))
         return file.replace(".webm", ".wav")
     
-    if file.endswith(".mp3"):
+    elif file.endswith(".mp3"):
         convert_mp3_to_wav(file, file.replace(".mp3", ".wav"))
         return file.replace(".mp3", ".wav")
-    
-    elif file.endswith(".mp4"):
-        convert_mp4_to_wav(file, file.replace(".mp4", ".wav"))
-        return file.replace(".mp4", ".wav")
     
     elif file.endswith(".m4a"):
         convert_m4a_to_wav(file, file.replace(".m4a", ".wav"))
