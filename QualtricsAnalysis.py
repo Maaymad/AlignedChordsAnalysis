@@ -4,7 +4,7 @@ import soundfile as sf
 import os
 import csv
 import shutil
-
+import xlsxwriter
 
 
 def convert_webm_to_wav(input_file, output_file):
@@ -241,22 +241,83 @@ def join_csv_files(silence_csv_path, music_csv_path, output_csv_path):
 
     print(f"Joined CSV files into {output_csv_path}")
 
+def export_to_excel_with_colors(csv_path, excel_path):
+    """
+    Exports a CSV file to an Excel file with specific column colors.
+    """
+    # Define column colors for data cells and darker shades for headers
+    column_colors = {
+        "drum": ("#FFCCCC", "#CC6666"),  # Light red for data, darker red for header
+        "curtain": ("#FFCCCC", "#CC6666"),
+        "bell": ("#CCFFCC", "#66CC66"),  # Light green for data, darker green for header
+        "coffee": ("#CCFFCC", "#66CC66"),
+        "school": ("#CCCCFF", "#6666CC"),  # Light blue for data, darker blue for header
+        "parent": ("#CCCCFF", "#6666CC"),
+        "moon": ("#CCCCFF", "#6666CC"),
+        "garden": ("#CCCCFF", "#6666CC"),
+        "hat": ("#FFFFCC", "#CCCC66"),  # Light yellow for data, darker yellow for header
+        "farmer": ("#FFFFCC", "#CCCC66"),
+        "nose": ("#FFFFCC", "#CCCC66"),
+        "turkey": ("#FFFFCC", "#CCCC66"),
+        "color": ("#FFCCFF", "#CC66CC"),  # Light pink for data, darker pink for header
+        "house": ("#FFCCFF", "#CC66CC"),
+        "river": ("#CCCCCC", "#666666"),  # Light gray for data, darker gray for header
+    }
+
+    # Read the CSV file
+    with open(csv_path, mode="r") as csv_file:
+        rows = [line.strip().split(",") for line in csv_file]
+
+    # Create an Excel file
+    workbook = xlsxwriter.Workbook(excel_path)
+    worksheet = workbook.add_worksheet()
+
+    # Create formats for each column color
+    data_formats = {word: workbook.add_format({"bg_color": colors[0]}) for word, colors in column_colors.items()}
+    header_formats = {word: workbook.add_format({"bg_color": colors[1], "bold": True}) for word, colors in column_colors.items()}
+
+    # Write data to the Excel file with colors
+    for row_index, row in enumerate(rows):
+        for col_index, cell in enumerate(row):
+            if row_index == 0:  # Header row
+                # Apply darker color to header cells based on column name
+                color_format = header_formats.get(cell.strip().lower(), None)
+                if color_format:
+                    worksheet.write(row_index, col_index, cell, color_format)
+                else:
+                    worksheet.write(row_index, col_index, cell)
+            else:
+                # Apply lighter color to data cells based on header column name
+                header = rows[0][col_index].strip().lower()
+                color_format = data_formats.get(header, None)
+                if color_format:
+                    worksheet.write(row_index, col_index, cell, color_format)
+                else:
+                    worksheet.write(row_index, col_index, cell)
+
+    workbook.close()
+    print(f"Excel file with colored columns saved to {excel_path}")
+
+
 def main():
     #folder_path = "//Users//maaymadar//Downloads//list1-mismatch11-6-25"
     base_path = "//Users//maaymadar//Downloads//2fromeach"
     silence_csv_path = os.path.join(base_path, "silence_results.csv")
     music_csv_path = os.path.join(base_path, "music_results.csv")
     output_csv_path = os.path.join(base_path, "full_data.csv")
+    excel_path = os.path.join(base_path, "full_data_colored.xlsx")
 
     sil_folders = [os.path.join(base_path, folder) for folder in os.listdir(base_path) 
                if folder.startswith("sil") and os.path.isdir(os.path.join(base_path, folder))]
     mus_folders = [os.path.join(base_path, folder) for folder in os.listdir(base_path) 
                 if folder.startswith("mus") and os.path.isdir(os.path.join(base_path, folder))]
 
-    handle_subjects(base_path, sil_folders, silence_csv_path)
-    handle_subjects(base_path, mus_folders, music_csv_path)
+    #handle_subjects(base_path, sil_folders, silence_csv_path)
+    #handle_subjects(base_path, mus_folders, music_csv_path)
 
-    join_csv_files(silence_csv_path, music_csv_path, output_csv_path)
+    #join_csv_files(silence_csv_path, music_csv_path, output_csv_path)
+
+    export_to_excel_with_colors(output_csv_path, excel_path)
 
 if __name__ == "__main__":
     main()
