@@ -4,7 +4,11 @@ import soundfile as sf
 import os
 import csv
 import shutil
-import xlsxwriter
+import pandas as pd
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill
+from openpyxl.utils.dataframe import dataframe_to_rows
+
 
 
 def convert_webm_to_wav(input_file, output_file):
@@ -177,6 +181,9 @@ def handle_subjects(base_path, folders, output_csv_path, condition):
             if not os.path.exists(temp_folder):
                 os.makedirs(temp_folder)
 
+            # Use a set to track copied files and avoid duplicates
+            copied_files = set()
+
             # Collect files for the current subject ID from all sil and mus folders
             trial_number = 1  # Initialize trial number for the subject
             for folder in folders:
@@ -184,12 +191,13 @@ def handle_subjects(base_path, folders, output_csv_path, condition):
                 for file_name in os.listdir(folder):
                     if file_name.startswith("R_") and "_" in file_name:
                         file_id = file_name.split("_")[1]
-                        if file_id == subject_id:  # Match the current subject ID
+                        if file_id == subject_id and file_name not in copied_files:  # Match the current subject ID and avoid duplicates
                             source_path = os.path.join(folder, file_name)
                             # Rename the file according to the subject index and folder name
                             new_file_name = f"sub{subject_index}_{folder_name}.webm"
                             destination_path = os.path.join(temp_folder, new_file_name)
                             shutil.copy(source_path, destination_path)
+                            copied_files.add(file_name)  # Add the file to the set of copied files
 
             # Process the files in the temp folder
             results = process_folder(temp_folder)  # Use your existing process_folder function
@@ -240,68 +248,59 @@ def join_csv_files(silence_csv_path, music_csv_path, output_csv_path):
 
     print(f"Joined CSV files into {output_csv_path}")
 
-def export_to_excel_with_colors(csv_path, excel_path):
-    """
-    Exports a CSV file to an Excel file with specific column colors.
-    """
-    # Define column colors for data cells and darker shades for headers
+def export_to_excel_with_colors(input_path, output_path):
+    # Define the column colors
     column_colors = {
-        "drum": ("#FFCCCC", "#CC6666"),  # Light red for data, darker red for header
+        "drum": ("#FFCCCC", "#CC6666"),
         "curtain": ("#FFCCCC", "#CC6666"),
-        "bell": ("#CCFFCC", "#66CC66"),  # Light green for data, darker green for header
+        "bell": ("#CCFFCC", "#66CC66"),
         "coffee": ("#CCFFCC", "#66CC66"),
-        "school": ("#CCCCFF", "#6666CC"),  # Light blue for data, darker blue for header
+        "school": ("#CCCCFF", "#6666CC"),
         "parent": ("#CCCCFF", "#6666CC"),
         "moon": ("#CCCCFF", "#6666CC"),
         "garden": ("#CCCCFF", "#6666CC"),
-        "hat": ("#FFFFCC", "#CCCC66"),  # Light yellow for data, darker yellow for header
+        "hat": ("#FFFFCC", "#CCCC66"),
         "farmer": ("#FFFFCC", "#CCCC66"),
         "nose": ("#FFFFCC", "#CCCC66"),
         "turkey": ("#FFFFCC", "#CCCC66"),
-        "color": ("#FFCCFF", "#CC66CC"),  # Light pink for data, darker pink for header
+        "color": ("#FFCCFF", "#CC66CC"),
         "house": ("#FFCCFF", "#CC66CC"),
-        "river": ("#CCCCCC", "#666666"),  # Light gray for data, darker gray for header
+        "river": ("#CCCCCC", "#666666"),
     }
 
     # Read the CSV file
-    with open(csv_path, mode="r") as csv_file:
-        rows = [line.strip().split(",") for line in csv_file]
+    df = pd.read_csv(input_path)
 
-    # Check if the CSV file is empty
-    if not rows:
-        print(f"The CSV file {csv_path} is empty. No Excel file will be created.")
-        return
+    # Create a new workbook
+    wb = Workbook()
+    ws = wb.active
 
-    # Create an Excel file
-    workbook = xlsxwriter.Workbook(excel_path)
-    worksheet = workbook.add_worksheet()
+    # Write the DataFrame to the worksheet
+    for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), 1):
+        ws.append(row)
 
-    # Create formats for each column color
-    data_formats = {word: workbook.add_format({"bg_color": colors[0]}) for word, colors in column_colors.items()}
-    header_formats = {word: workbook.add_format({"bg_color": colors[1], "bold": True}) for word, colors in column_colors.items()}
+    # Apply the colors to the columns
+    for col in df.columns:
+        if col in column_colors:
+            data_fill = PatternFill(start_color=column_colors[col][0][1:], 
+                                  end_color=column_colors[col][0][1:], 
+                                  fill_type="solid")
+            header_fill = PatternFill(start_color=column_colors[col][1][1:], 
+                                    end_color=column_colors[col][1][1:], 
+                                    fill_type="solid")
 
-    # Write data to the Excel file with colors
-    for row_index, row in enumerate(rows):
-        for col_index, cell in enumerate(row):
-            if row_index == 0:  # Header row
-                # Apply darker color to header cells based on column name
-                color_format = header_formats.get(cell.strip().lower(), None)
-                if color_format:
-                    worksheet.write(row_index, col_index, cell, color_format)
-                else:
-                    worksheet.write(row_index, col_index, cell)
-            else:
-                # Apply lighter color to data cells based on header column name
-                header = rows[0][col_index].strip().lower() if col_index < len(rows[0]) else ""
-                color_format = data_formats.get(header, None)
-                if color_format:
-                    worksheet.write(row_index, col_index, cell, color_format)
-                else:
-                    worksheet.write(row_index, col_index, cell)
+            # Color the header
+            header_cell = ws.cell(row=1, column=df.columns.get_loc(col)+1)
+            header_cell.fill = header_fill
 
-    workbook.close()
-    print(f"Excel file with colored columns saved to {excel_path}")
+            # Color the data cells
+            for row in range(2, ws.max_row + 1):
+                cell = ws.cell(row=row, column=df.columns.get_loc(col)+1)
+                cell.fill = data_fill
 
+    # Save the workbook
+    wb.save(output_path)
+    print(f"Styled Excel file saved to {output_path}")
 
 def main():
     #folder_path = "//Users//maaymadar//Downloads//list1-mismatch11-6-25"
