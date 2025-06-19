@@ -1,15 +1,18 @@
-import speech_recognition as sr
 from moviepy import AudioFileClip
-import soundfile as sf
+import json
+import wave
+import vosk
 import os
 import csv
 import shutil
 import pandas as pd
+from pydub import AudioSegment
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 
-
+MODEL_PATH = "//Users//maaymadar//Downloads//vosk-model-small-en-us-0.15"  # Update this path to your downloaded model
+model = vosk.Model(MODEL_PATH)
 
 def convert_webm_to_wav(input_file, output_file):
     audio = AudioFileClip(input_file)
@@ -32,55 +35,105 @@ TARGET_WORDS = ["drum", "curtain", "bell", "coffee", "school", "parent",
                 "color", "house", "river"]
 
 #function that recives a file, checks the type of the file and converts it to mp3 if it is a webm or mp4 or m4a
-def convert_audio_to_mp3(file):
-
+def convert_audio_to_wav(file):
+    """Convert audio file to WAV format with correct sample rate for Vosk (16kHz mono, 16-bit PCM)"""
     if file.endswith(".wav"):
-        return file
+        # Check if WAV file has correct sample rate (16kHz mono, 16-bit PCM)
+        try:
+            with wave.open(file, 'rb') as wf:
+                if wf.getframerate() == 16000 and wf.getnchannels() == 1 and wf.getsampwidth() == 2:
+                    return file
+                else:
+                    # Convert to correct format (16kHz mono, 16-bit PCM)
+                    output_file = file.replace(".wav", "_converted.wav")
+                    audio = AudioSegment.from_wav(file)
+                    audio = audio.set_frame_rate(16000).set_channels(1)  # Set sample rate to 16kHz and convert to mono
+                    audio.export(output_file, format="wav", parameters=["-acodec", "pcm_s16le"])  # Export as 16-bit PCM
+                    return output_file
+        except Exception as e:
+            print(f"Error checking WAV file {file}: {e}")
+            return None
 
     elif file.endswith(".webm"):
-        convert_webm_to_wav(file, file.replace(".webm", ".wav"))
-        return file.replace(".webm", ".wav")
-    
+        output_file = file.replace(".webm", ".wav")
+        audio = AudioSegment.from_file(file, format="webm")
+        # Convert to mono and set sample rate to 16kHz
+        audio = audio.set_frame_rate(16000).set_channels(1)
+        audio.export(output_file, format="wav", parameters=["-acodec", "pcm_s16le"])  # Export as 16-bit PCM
+        return output_file
+
     elif file.endswith(".mp3"):
-        convert_mp3_to_wav(file, file.replace(".mp3", ".wav"))
-        return file.replace(".mp3", ".wav")
-    
+        output_file = file.replace(".mp3", ".wav")
+        audio = AudioSegment.from_file(file, format="mp3")
+        # Convert to mono and set sample rate to 16kHz
+        audio = audio.set_frame_rate(16000).set_channels(1)
+        audio.export(output_file, format="wav", parameters=["-acodec", "pcm_s16le"])  # Export as 16-bit PCM
+        return output_file
+
     elif file.endswith(".m4a"):
-        convert_m4a_to_wav(file, file.replace(".m4a", ".wav"))
-        return file.replace(".m4a", ".wav")
-    
+        output_file = file.replace(".m4a", ".wav")
+        audio = AudioSegment.from_file(file, format="m4a")
+        # Convert to mono and set sample rate to 16kHz
+        audio = audio.set_frame_rate(16000).set_channels(1)
+        audio.export(output_file, format="wav", parameters=["-acodec", "pcm_s16le"])  # Export as 16-bit PCM
+        return output_file
+
     else:
         print("Unsupported file type")
+        return None
 
-
-def transcribe_audio(file_path):
+def transcribe_audio_vosk(file_path):
     """
-    Transcribes an audio file using Google Web Speech API.
+    Transcribes an audio file using Vosk.
     Filters the transcript to include only target words and their order.
     """
-    recognizer = sr.Recognizer()
-    converted_path = convert_audio_to_mp3(file_path)
-    print(f"Transcribing {converted_path}...")
+    #converted_path = convert_audio_to_wav(file_path)
+    print(f"Transcribing {file_path}...")
+    
     try:
-        # Ensure the file is in the right format
-        if converted_path is None:
+        if file_path is None:
             raise ValueError("File conversion failed or unsupported file type.")
 
-        with sr.AudioFile(converted_path) as source:
-            audio_data = recognizer.record(source)
+        # Open the WAV file
+        wf = wave.open(file_path, 'rb')
+        
+        # Check if the file is in the correct format
+        if wf.getnchannels() != 1 or wf.getsampwidth() != 2 or wf.getframerate() != 16000:
+            raise ValueError(f"Audio file must be 16kHz mono PCM. Got: channels={wf.getnchannels()}, "
+                           f"sampwidth={wf.getsampwidth()}, framerate={wf.getframerate()}")
 
-        try:
-            transcript = recognizer.recognize_google(audio_data).lower()  # Convert transcript to lowercase
-            # Filter and map the transcript to target words
-            word_order = [word for word in transcript.split() if word in TARGET_WORDS]
-            return word_order
-        except sr.UnknownValueError:
-            return []
-        except sr.RequestError as e:
-            return f"Error: {e}"
-    
+        # Initialize recognizer
+        rec = vosk.KaldiRecognizer(model, wf.getframerate())
+        rec.SetWords(True)
+        
+        transcript_words = []
+        
+        # Process audio in chunks
+        while True:
+            data = wf.readframes(4000)
+            if len(data) == 0:
+                break
+            if rec.AcceptWaveform(data):
+                result = json.loads(rec.Result())
+                if 'text' in result:
+                    words = result['text'].lower().split()
+                    transcript_words.extend(words)
+        
+        # Get final result
+        final_result = json.loads(rec.FinalResult())
+        if 'text' in final_result:
+            words = final_result['text'].lower().split()
+            transcript_words.extend(words)
+        
+        wf.close()
+        
+        # Filter and map the transcript to target words
+        word_order = [word for word in transcript_words if word in TARGET_WORDS]
+        return word_order
+
     except Exception as e:
-        raise ValueError(f"Failed to transcribe audio file {file_path}: {e}")
+        print(f"Error transcribing {file_path}: {e}")
+        return []
 
 def process_folder(folder_path):
     """
@@ -94,10 +147,10 @@ def process_folder(folder_path):
             continue
 
         file_path = os.path.join(folder_path, file_name)
-        converted_file = convert_audio_to_mp3(file_path)
+        converted_file = convert_audio_to_wav(file_path)
         if converted_file:
             try:
-                word_order = transcribe_audio(converted_file)
+                word_order = transcribe_audio_vosk(converted_file)
                 results[file_name] = word_order
             except ValueError as e:
                 print(f"Error processing {file_name}: {e}")
