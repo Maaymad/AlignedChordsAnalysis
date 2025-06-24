@@ -178,6 +178,7 @@ def save_results_to_csv(results, output_csv_path, condition):
                 row.append(", ".join(map(str, positions)) if positions else "")
             
             writer.writerow(row)
+
 def extract_subject_ids(folder_path):
     """
     Extracts subject IDs from filenames in the given folder.
@@ -211,11 +212,116 @@ def process_subject(temp_folder, output_csv_path, condition):
     results = process_folder(temp_folder)  # Use your existing process_folder function
     save_results_to_csv(results, output_csv_path, condition)  # Save results with condition
 
-def handle_subjects(base_path, folders, output_csv_path, condition):
+def get_expected_trials(condition):
+    """
+    Returns the list of expected trial patterns based on the condition.
+    """
+    if condition == "music":
+        return ["mus1_1", "mus1_2", "mus1_3", "mus1_4", "mus1_5", "mus2_1", "mus2_2", "mus2_3"]
+    elif condition == "silence":
+        return ["sil1_1", "sil1_2", "sil1_3", "sil1_4", "sil1_5", "sil2_1", "sil2_2", "sil2_3"]
+    else:
+        raise ValueError(f"Unknown condition: {condition}")
+
+def collect_subject_files(subject_id, subject_index, folders, expected_trials, temp_folder):
+    """
+    Collects and copies files for a specific subject from all folders.
+    Returns a dictionary mapping trial patterns to copied file names.
+    """
+    found_files = {}
+    
+    for folder in folders:
+        folder_name = os.path.basename(folder)  # e.g., "mus1_1", "sil2_3", etc.
+        for file_name in os.listdir(folder):
+            if file_name.startswith("R_") and "_" in file_name:
+                file_id = file_name.split("_")[1]
+                if file_id == subject_id and folder_name in expected_trials:
+                    source_path = os.path.join(folder, file_name)
+                    new_file_name = f"sub{subject_index}_{folder_name}.webm"
+                    destination_path = os.path.join(temp_folder, new_file_name)
+                    shutil.copy(source_path, destination_path)
+                    found_files[folder_name] = new_file_name
+    
+    return found_files
+
+def create_trial_row(subject_index, trial_number, expected_trial, found_files, results, condition):
+    """
+    Creates a CSV row for a single trial, handling both found and missing trials.
+    """
+    file_name_no_ext = f"sub{subject_index}_{expected_trial}"
+    
+    if expected_trial in found_files and found_files[expected_trial] in results:
+        # File was found and processed successfully
+        word_order = results[found_files[expected_trial]]
+        unique_word_count = len(set(word_order))
+        row = [file_name_no_ext, trial_number, unique_word_count, condition]
+        
+        # Add word positions
+        for word in TARGET_WORDS:
+            positions = [i + 1 for i, w in enumerate(word_order) if w == word]
+            row.append(", ".join(map(str, positions)) if positions else "")
+    else:
+        # File was missing or failed to process
+        row = [file_name_no_ext, trial_number, "NA", condition]
+        # Add empty strings for all target words
+        for word in TARGET_WORDS:
+            row.append("")
+    
+    return row
+
+def process_single_subject(subject_id, subject_index, folders, expected_trials, base_path, condition):
+    """
+    Processes all trials for a single subject and returns the rows for CSV writing.
+    """
+    temp_folder = os.path.join(base_path, "temp_subject")
+    if not os.path.exists(temp_folder):
+        os.makedirs(temp_folder)
+    
+    try:
+        # Collect files for this subject
+        found_files = collect_subject_files(subject_id, subject_index, folders, expected_trials, temp_folder)
+        
+        # Process the files that were found
+        results = process_folder(temp_folder) if found_files else {}
+        
+        # Create rows for all expected trials
+        rows = []
+        for trial_number, expected_trial in enumerate(expected_trials, start=1):
+            row = create_trial_row(subject_index, trial_number, expected_trial, found_files, results, condition)
+            rows.append(row)
+        
+        return rows
+    
+    finally:
+        # Always clean up temporary folder
+        if os.path.exists(temp_folder):
+            shutil.rmtree(temp_folder)
+
+def determine_condition_from_folders(folders):
+    """
+    Determines the condition (music or silence) based on folder names.
+    """
+    folder_names = [os.path.basename(folder) for folder in folders]
+    
+    # Check if any folder starts with "mus"
+    if any(name.startswith("mus") for name in folder_names):
+        return "music"
+    # Check if any folder starts with "sil"
+    elif any(name.startswith("sil") for name in folder_names):
+        return "silence"
+    else:
+        raise ValueError(f"Cannot determine condition from folder names: {folder_names}")
+
+def handle_subjects(base_path, folders, output_csv_path, condition=None):
     """
     Processes all subjects and exports their data into a single CSV file.
     Ensures all 8 expected trials are present, marking missing ones as NA.
     """
+    # Determine condition if not provided
+    if condition is None:
+        condition = determine_condition_from_folders(folders)
+        print(f"Detected condition: {condition}")
+
     # Extract all subject IDs from the folders
     all_subject_ids = set()
     for folder in folders:
@@ -223,13 +329,8 @@ def handle_subjects(base_path, folders, output_csv_path, condition):
 
     print(f"Found {len(all_subject_ids)} unique subject IDs.")
 
-    # Define expected trial patterns based on condition
-    if condition == "music":
-        expected_trials = ["mus1_1", "mus1_2", "mus1_3", "mus1_4", "mus1_5", "mus2_1", "mus2_2", "mus2_3"]
-    elif condition == "silence":
-        expected_trials = ["sil1_1", "sil1_2", "sil1_3", "sil1_4", "sil1_5", "sil2_1", "sil2_2", "sil2_3"]
-    else:
-        raise ValueError(f"Unknown condition: {condition}")
+    # Get expected trial patterns for this condition
+    expected_trials = get_expected_trials(condition)
 
     # Prepare to write to a single CSV file
     with open(output_csv_path, mode="w", newline="") as csv_file:
@@ -239,59 +340,11 @@ def handle_subjects(base_path, folders, output_csv_path, condition):
 
         # Process each subject ID individually
         for subject_index, subject_id in enumerate(sorted(all_subject_ids), start=1):
-            temp_folder = os.path.join(base_path, "temp_subject")
-            if not os.path.exists(temp_folder):
-                os.makedirs(temp_folder)
-
-            # Collect files for the current subject ID from all folders
-            found_files = {}  # Dictionary to store found files by trial pattern
+            rows = process_single_subject(subject_id, subject_index, folders, expected_trials, base_path, condition)
             
-            for folder in folders:
-                folder_name = os.path.basename(folder)  # e.g., "mus1_1", "sil2_3", etc.
-                for file_name in os.listdir(folder):
-                    if file_name.startswith("R_") and "_" in file_name:
-                        file_id = file_name.split("_")[1]
-                        if file_id == subject_id:
-                            # Map the folder name to the expected trial pattern
-                            if folder_name in expected_trials:
-                                source_path = os.path.join(folder, file_name)
-                                new_file_name = f"sub{subject_index}_{folder_name}.webm"
-                                destination_path = os.path.join(temp_folder, new_file_name)
-                                shutil.copy(source_path, destination_path)
-                                found_files[folder_name] = new_file_name
-
-            # Process the files that were found
-            if found_files:
-                results = process_folder(temp_folder)
-            else:
-                results = {}
-
-            # Write results for all expected trials (found or missing)
-            for trial_number, expected_trial in enumerate(expected_trials, start=1):
-                file_name_no_ext = f"sub{subject_index}_{expected_trial}"
-                
-                if expected_trial in found_files and found_files[expected_trial] in results:
-                    # File was found and processed successfully
-                    word_order = results[found_files[expected_trial]]
-                    unique_word_count = len(set(word_order))
-                    row = [file_name_no_ext, trial_number, unique_word_count, condition]
-                    
-                    # Add word positions
-                    for word in TARGET_WORDS:
-                        positions = [i + 1 for i, w in enumerate(word_order) if w == word]
-                        row.append(", ".join(map(str, positions)) if positions else "")
-                else:
-                    # File was missing or failed to process
-                    row = [file_name_no_ext, trial_number, "NA", condition]
-                    # Add empty strings for all target words
-                    for word in TARGET_WORDS:
-                        row.append("")
-
+            # Write all rows for this subject
+            for row in rows:
                 writer.writerow(row)
-
-            # Clean up temporary folder
-            if os.path.exists(temp_folder):
-                shutil.rmtree(temp_folder)
 
     print(f"All subject data exported to {output_csv_path}")
 
@@ -388,8 +441,8 @@ def main():
     mus_folders = [os.path.join(base_path, folder) for folder in os.listdir(base_path) 
                 if folder.startswith("mus") and os.path.isdir(os.path.join(base_path, folder))]
 
-    handle_subjects(base_path, sil_folders, silence_csv_path, "silence")
-    handle_subjects(base_path, mus_folders, music_csv_path, "music")
+    handle_subjects(base_path, sil_folders, silence_csv_path)
+    handle_subjects(base_path, mus_folders, music_csv_path)
 
     join_csv_files(silence_csv_path, music_csv_path, output_csv_path)
 
