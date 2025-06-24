@@ -283,9 +283,9 @@ def handle_subjects(base_path, folders, output_csv_path, condition):
                 else:
                     # File was missing or failed to process
                     row = [file_name_no_ext, trial_number, "NA", condition]
-                    # Add NA for all target words
+                    # Add empty strings for all target words
                     for word in TARGET_WORDS:
-                        row.append("NA")
+                        row.append("")
 
                 writer.writerow(row)
 
@@ -341,8 +341,8 @@ def export_to_excel_with_colors(input_path, output_path):
         "river": ("#CCCCCC", "#666666"),
     }
 
-    # Read the CSV file
-    df = pd.read_csv(input_path)
+    # Read the CSV file, keeping "NA" as string
+    df = pd.read_csv(input_path, keep_default_na=False, na_values=[])
 
     # Create a new workbook
     wb = Workbook()
