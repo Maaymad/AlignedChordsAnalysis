@@ -1,18 +1,26 @@
-from moviepy import AudioFileClip
-import json
-import wave
-import vosk
-import os
 import csv
+import json
+import os
 import shutil
+import wave
+
 import pandas as pd
+from moviepy import AudioFileClip
 from pydub import AudioSegment
+import vosk
+
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 
-MODEL_PATH = "//Users//maaymadar//Downloads//vosk-model-small-en-us-0.15"  # Update this path to your downloaded model
+# Path to your downloaded vosk model
+MODEL_PATH = "//Users//maaymadar//Downloads//vosk-model-en-us-0.22"
 model = vosk.Model(MODEL_PATH)
+
+# List of target words
+TARGET_WORDS = ["drum", "curtain", "bell", "coffee", "school", "parent",
+                "moon", "garden", "hat", "farmer", "nose", "turkey",
+                "color", "house", "river"]
 
 def convert_webm_to_wav(input_file, output_file):
     audio = AudioFileClip(input_file)
@@ -28,11 +36,6 @@ def convert_m4a_to_wav(input_file, output_file):
     audio = AudioFileClip(input_file)
     audio.write_audiofile(output_file)
     audio.close()
-
-# List of target words
-TARGET_WORDS = ["drum", "curtain", "bell", "coffee", "school", "parent", 
-                "moon", "garden", "hat", "farmer", "nose", "turkey", 
-                "color", "house", "river"]
 
 #function that recives a file, checks the type of the file and converts it to mp3 if it is a webm or mp4 or m4a
 def convert_audio_to_wav(file):
@@ -141,7 +144,7 @@ def process_folder(folder_path):
     """
     results = {}
     for file_name in os.listdir(folder_path):
-        # Skip non-audio files like .DS_Store
+        # Skip non-audio files
         if not file_name.lower().endswith((".wav", ".mp3", ".webm", ".flac")):
             print(f"Skipping non-audio file: {file_name}")
             continue
@@ -204,13 +207,6 @@ def copy_subject_files(subject_ids, source_folders, temp_folder):
                     source_path = os.path.join(folder, file_name)
                     destination_path = os.path.join(temp_folder, file_name)
                     shutil.copy(source_path, destination_path)
-
-def process_subject(temp_folder, output_csv_path, condition):
-    """
-    Processes audio files for a subject by transcribing them and saving results to a CSV.
-    """
-    results = process_folder(temp_folder)  # Use your existing process_folder function
-    save_results_to_csv(results, output_csv_path, condition)  # Save results with condition
 
 def get_expected_trials(condition):
     """
@@ -293,7 +289,7 @@ def process_single_subject(subject_id, subject_index, folders, expected_trials, 
         return rows
     
     finally:
-        # Always clean up temporary folder
+        # Clean up temporary folder
         if os.path.exists(temp_folder):
             shutil.rmtree(temp_folder)
 
@@ -309,8 +305,6 @@ def determine_condition_from_folders(folders):
     # Check if any folder starts with "sil"
     elif any(name.startswith("sil") for name in folder_names):
         return "silence"
-    else:
-        raise ValueError(f"Cannot determine condition from folder names: {folder_names}")
 
 def handle_subjects(base_path, folders, output_csv_path, condition=None):
     """
@@ -327,7 +321,7 @@ def handle_subjects(base_path, folders, output_csv_path, condition=None):
     for folder in folders:
         all_subject_ids.update(extract_subject_ids(folder))
 
-    print(f"Found {len(all_subject_ids)} unique subject IDs.")
+    print(f"Found {len(all_subject_ids)} unique subject IDs for {condition} condition.")
 
     # Get expected trial patterns for this condition
     expected_trials = get_expected_trials(condition)
@@ -429,18 +423,24 @@ def export_to_excel_with_colors(input_path, output_path):
     print(f"Styled Excel file saved to {output_path}")
 
 def main():
-    #folder_path = "//Users//maaymadar//Downloads//list1-mismatch11-6-25"
-    base_path = "//Users//maaymadar//Downloads//2fromeach"
+
+    # Path of Base Directory
+    base_path = "//Users//maaymadar//Downloads//Words+Learning+Aligned+Chords_June+18,+2025_01.34"
+    #base_path = "//Users//maaymadar//Downloads//2fromeach"
+
+    # Paths for CSV files and Excel file
     silence_csv_path = os.path.join(base_path, "silence_results.csv")
     music_csv_path = os.path.join(base_path, "music_results.csv")
     output_csv_path = os.path.join(base_path, "full_data.csv")
     excel_path = os.path.join(base_path, "full_data_colored.xlsx")
 
+    # Extract silence and music folders
     sil_folders = [os.path.join(base_path, folder) for folder in os.listdir(base_path) 
                if folder.startswith("sil") and os.path.isdir(os.path.join(base_path, folder))]
     mus_folders = [os.path.join(base_path, folder) for folder in os.listdir(base_path) 
                 if folder.startswith("mus") and os.path.isdir(os.path.join(base_path, folder))]
 
+    # Process silence and music conditions seperatly
     handle_subjects(base_path, sil_folders, silence_csv_path)
     handle_subjects(base_path, mus_folders, music_csv_path)
 
