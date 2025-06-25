@@ -166,7 +166,7 @@ def save_results_to_csv(results, output_csv_path, condition):
     with open(output_csv_path, mode="w", newline="") as csv_file:
         writer = csv.writer(csv_file)
         # Write header row
-        writer.writerow(["File Name", "Word Count", "Condition"] + TARGET_WORDS)
+        writer.writerow(["Subject ID", "File Name", "Word Count", "Condition"] + TARGET_WORDS)
 
         # Write rows for each file, sorted by file name
         for file_name in sorted(results.keys()):  # Sort file names alphabetically
@@ -174,7 +174,10 @@ def save_results_to_csv(results, output_csv_path, condition):
             # Calculate the sum of unique words said
             unique_word_count = len(set(word_order))  # Count unique words in the word_order list
 
-            row = [file_name, unique_word_count, condition]  # Add condition after unique_word_count
+            # Extract subject ID from filename (assumes format "R_{subject_id}_...")
+            subject_id = file_name.split("_")[1]
+
+            row = [subject_id, file_name, unique_word_count, condition]
             for word in TARGET_WORDS:
                 # Find all occurrences of the word and their positions
                 positions = [i + 1 for i, w in enumerate(word_order) if w == word]
@@ -240,7 +243,7 @@ def collect_subject_files(subject_id, subject_index, folders, expected_trials, t
     
     return found_files
 
-def create_trial_row(subject_index, trial_number, expected_trial, found_files, results, condition):
+def create_trial_row(subject_id, subject_index, trial_number, expected_trial, found_files, results, condition):
     """
     Creates a CSV row for a single trial, handling both found and missing trials.
     """
@@ -250,7 +253,7 @@ def create_trial_row(subject_index, trial_number, expected_trial, found_files, r
         # File was found and processed successfully
         word_order = results[found_files[expected_trial]]
         unique_word_count = len(set(word_order))
-        row = [file_name_no_ext, trial_number, unique_word_count, condition]
+        row = [subject_id, file_name_no_ext, trial_number, unique_word_count, condition]
         
         # Add word positions
         for word in TARGET_WORDS:
@@ -258,7 +261,7 @@ def create_trial_row(subject_index, trial_number, expected_trial, found_files, r
             row.append(", ".join(map(str, positions)) if positions else "")
     else:
         # File was missing or failed to process
-        row = [file_name_no_ext, trial_number, "NA", condition]
+        row = [subject_id, file_name_no_ext, trial_number, "NA", condition]
         # Add empty strings for all target words
         for word in TARGET_WORDS:
             row.append("")
@@ -283,7 +286,7 @@ def process_single_subject(subject_id, subject_index, folders, expected_trials, 
         # Create rows for all expected trials
         rows = []
         for trial_number, expected_trial in enumerate(expected_trials, start=1):
-            row = create_trial_row(subject_index, trial_number, expected_trial, found_files, results, condition)
+            row = create_trial_row(subject_id, subject_index, trial_number, expected_trial, found_files, results, condition)
             rows.append(row)
         
         return rows
@@ -330,7 +333,7 @@ def handle_subjects(base_path, folders, output_csv_path, condition=None):
     with open(output_csv_path, mode="w", newline="") as csv_file:
         writer = csv.writer(csv_file)
         # Write header row
-        writer.writerow(["File Name", "Trial Number", "Word Count", "Condition"] + TARGET_WORDS)
+        writer.writerow(["Subject ID", "File Name", "Trial Number", "Word Count", "Condition"] + TARGET_WORDS)
 
         # Process each subject ID individually
         for subject_index, subject_id in enumerate(sorted(all_subject_ids), start=1):
