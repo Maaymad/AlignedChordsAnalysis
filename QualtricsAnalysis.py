@@ -7,15 +7,13 @@ import wave
 import pandas as pd
 from moviepy import AudioFileClip
 from pydub import AudioSegment
-import vosk
+from deepgram import DeepgramClient, PrerecordedOptions
 
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 
-# Path to your downloaded vosk model
-MODEL_PATH = "//Users//maaymadar//Downloads//vosk-model-en-us-0.22"
-model = vosk.Model(MODEL_PATH)
+DEEPGRAM_API_KEY = "0621d176ddc509704a86222ef09ef360933d086a"
 
 # List of target words
 TARGET_WORDS = ["drum", "curtain", "bell", "coffee", "school", "parent",
@@ -85,51 +83,47 @@ def convert_audio_to_wav(file):
         print("Unsupported file type")
         return None
 
-def transcribe_audio_vosk(file_path):
+def transcribe_audio(file_path, DEEPGRAM_API_KEY):
     """
-    Transcribes an audio file using Vosk.
+    Transcribes an audio file using Deepgram (synchronous version).
     Filters the transcript to include only target words and their order.
     """
-    #converted_path = convert_audio_to_wav(file_path)
     print(f"Transcribing {file_path}...")
     
     try:
         if file_path is None:
-            raise ValueError("File conversion failed or unsupported file type.")
+            raise ValueError("File path is None or unsupported file type.")
 
-        # Open the WAV file
-        wf = wave.open(file_path, 'rb')
+        # Initialize the Deepgram client
+        deepgram = DeepgramClient(DEEPGRAM_API_KEY)
         
-        # Check if the file is in the correct format
-        if wf.getnchannels() != 1 or wf.getsampwidth() != 2 or wf.getframerate() != 16000:
-            raise ValueError(f"Audio file must be 16kHz mono PCM. Got: channels={wf.getnchannels()}, "
-                           f"sampwidth={wf.getsampwidth()}, framerate={wf.getframerate()}")
+        # Set Deepgram options
+        options = PrerecordedOptions(
+            model="nova-2",
+            smart_format=True,
+            language = "en-GB"
+        )
 
-        # Initialize recognizer
-        rec = vosk.KaldiRecognizer(model, wf.getframerate())
-        rec.SetWords(True)
-        
+        # Open the audio file
+        with open(file_path, "rb") as file:
+            buffer_data = file.read()
+
+        # Send the audio to Deepgram for transcription
+        response = deepgram.listen.rest.v("1").transcribe_file(
+            {"buffer": buffer_data}, options, timeout=120
+        )
+
+        # Extract words from the response
         transcript_words = []
-        
-        # Process audio in chunks
-        while True:
-            data = wf.readframes(4000)
-            if len(data) == 0:
-                break
-            if rec.AcceptWaveform(data):
-                result = json.loads(rec.Result())
-                if 'text' in result:
-                    words = result['text'].lower().split()
-                    transcript_words.extend(words)
-        
-        # Get final result
-        final_result = json.loads(rec.FinalResult())
-        if 'text' in final_result:
-            words = final_result['text'].lower().split()
-            transcript_words.extend(words)
-        
-        wf.close()
-        
+        if response.results is not None:
+            channels = response.results.channels
+            for channel in channels:
+                for alternative in channel.alternatives:
+                    if alternative.words:
+                        transcript_words.extend([word.word.lower() for word in alternative.words])
+                    elif alternative.transcript:
+                        transcript_words.extend(alternative.transcript.lower().split())
+
         # Filter and map the transcript to target words
         word_order = [word for word in transcript_words if word in TARGET_WORDS]
         return word_order
@@ -153,7 +147,7 @@ def process_folder(folder_path):
         converted_file = convert_audio_to_wav(file_path)
         if converted_file:
             try:
-                word_order = transcribe_audio_vosk(converted_file)
+                word_order = transcribe_audio(converted_file, DEEPGRAM_API_KEY)
                 results[file_name] = word_order
             except ValueError as e:
                 print(f"Error processing {file_name}: {e}")
@@ -423,7 +417,7 @@ def export_to_excel_with_colors(input_path, output_path):
 
     # Save the workbook
     wb.save(output_path)
-    print(f"Styled Excel file saved to {output_path}")
+    print(f"Colored Excel file saved to {output_path}")
 
 def main():
 
