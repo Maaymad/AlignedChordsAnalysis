@@ -371,21 +371,21 @@ def join_csv_files(silence_csv_path, music_csv_path, output_csv_path):
 def export_to_excel_with_colors(input_path, output_path):
     # Define the column colors
     column_colors = {
-        "drum": ("#FFCCCC", "#CC6666"),
-        "curtain": ("#FFCCCC", "#CC6666"),
-        "bell": ("#CCFFCC", "#66CC66"),
-        "coffee": ("#CCFFCC", "#66CC66"),
-        "school": ("#CCCCFF", "#6666CC"),
-        "parent": ("#CCCCFF", "#6666CC"),
-        "moon": ("#CCCCFF", "#6666CC"),
-        "garden": ("#CCCCFF", "#6666CC"),
-        "hat": ("#FFFFCC", "#CCCC66"),
-        "farmer": ("#FFFFCC", "#CCCC66"),
-        "nose": ("#FFFFCC", "#CCCC66"),
-        "turkey": ("#FFFFCC", "#CCCC66"),
-        "color": ("#FFCCFF", "#CC66CC"),
-        "house": ("#FFCCFF", "#CC66CC"),
-        "river": ("#CCCCCC", "#666666"),
+        "drum": ("FFCCCC", "CC6666"),
+        "curtain": ("FFCCCC", "CC6666"),
+        "bell": ("CCFFCC", "66CC66"),
+        "coffee": ("CCFFCC", "66CC66"),
+        "school": ("CCCCFF", "6666CC"),
+        "parent": ("CCCCFF", "6666CC"),
+        "moon": ("CCCCFF", "6666CC"),
+        "garden": ("CCCCFF", "6666CC"),
+        "hat": ("FFFFCC", "CCCC66"),
+        "farmer": ("FFFFCC", "CCCC66"),
+        "nose": ("FFFFCC", "CCCC66"),
+        "turkey": ("FFFFCC", "CCCC66"),
+        "color": ("FFCCFF", "CC66CC"),
+        "house": ("FFCCFF", "CC66CC"),
+        "river": ("CCCCCC", "666666"),
     }
 
     # Read the CSV file, keeping "NA" as string
@@ -402,11 +402,11 @@ def export_to_excel_with_colors(input_path, output_path):
     # Apply the colors to the columns
     for col in df.columns:
         if col in column_colors:
-            data_fill = PatternFill(start_color=column_colors[col][0][1:], 
-                                  end_color=column_colors[col][0][1:], 
+            data_fill = PatternFill(start_color=column_colors[col][0],
+                                  end_color=column_colors[col][0],
                                   fill_type="solid")
-            header_fill = PatternFill(start_color=column_colors[col][1][1:], 
-                                    end_color=column_colors[col][1][1:], 
+            header_fill = PatternFill(start_color=column_colors[col][1],
+                                    end_color=column_colors[col][1],
                                     fill_type="solid")
 
             # Color the header
