@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import wave
+from datetime import datetime
 
 import pandas as pd
 from moviepy import AudioFileClip
@@ -89,7 +90,11 @@ def transcribe_audio(file_path, DEEPGRAM_API_KEY):
     Filters the transcript to include only target words and their order.
     """
     print(f"Transcribing {file_path}...")
-    
+
+    # debug timeouts
+    current_time = datetime.now()
+    print("Current time:", current_time)
+
     try:
         if file_path is None:
             raise ValueError("File path is None or unsupported file type.")
