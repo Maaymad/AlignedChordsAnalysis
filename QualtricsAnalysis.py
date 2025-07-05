@@ -4,13 +4,6 @@ import shutil
 import tempfile
 from datetime import datetime
 
-import pandas as pd
-from openpyxl import Workbook
-from openpyxl.utils.dataframe import dataframe_to_rows
-from openpyxl.styles import PatternFill
-
-from pydub import AudioSegment
-from pydub.utils import which
 import soundfile as sf
 from moviepy import AudioFileClip
 from deepgram import DeepgramClient, PrerecordedOptions
@@ -18,8 +11,12 @@ from deepgram import DeepgramClient, PrerecordedOptions
 DEEPGRAM_API_KEY = "0621d176ddc509704a86222ef09ef360933d086a"
 
 # List of target words
-TARGET_WORDS = ["drum", "curtain", "bell", "coffee", "school", "parent", 
-                "moon", "garden", "hat", "farmer", "nose", "turkey", 
+TARGET_WORDS_LIST_1= ["drum", "curtain", "bell", "coffee", "school", "parent",
+                "moon", "garden", "hat", "farmer", "nose", "turkey",
+                "color", "house", "river"]
+
+TARGET_WORDS_LIST_2 = ["drum", "curtain", "bell", "coffee", "school", "parent",
+                "moon", "garden", "hat", "farmer", "nose", "turkey",
                 "color", "house", "river"]
 
 #function that recives a file, checks the type of the file and converts it to mp3 if it is a webm or mp4 or m4a
@@ -64,7 +61,7 @@ def process_audio_file(file_path):
         print(f"Error processing file {file_path}: {e}")
         return None
 
-def transcribe_audio(file_path, DEEPGRAM_API_KEY):
+def transcribe_audio(file_path, target_words, DEEPGRAM_API_KEY):
     """
     Transcribes an audio file using Deepgram (synchronous version).
     Filters the transcript to include only target words and their order.
@@ -110,14 +107,14 @@ def transcribe_audio(file_path, DEEPGRAM_API_KEY):
                         transcript_words.extend(alternative.transcript.lower().split())
 
         # Filter and map the transcript to target words
-        word_order = [word for word in transcript_words if word in TARGET_WORDS]
+        word_order = [word for word in transcript_words if word in target_words]
         return word_order
 
     except Exception as e:
         print(f"Error transcribing {file_path}: {e}")
         return []
 
-def process_folder(folder_path):
+def process_folder(folder_path, target_words):
     """
     Processes all audio files in the folder:
     Converts them to WAV and transcribes using Deepgram.
@@ -137,7 +134,7 @@ def process_folder(folder_path):
 
             if converted_file:
                 try:
-                    word_order = transcribe_audio(converted_file, DEEPGRAM_API_KEY)
+                    word_order = transcribe_audio(converted_file, target_words, DEEPGRAM_API_KEY)
                     results[file_name] = word_order
                 except ValueError as e:
                     print(f"Error processing {file_name}: {e}")
@@ -145,7 +142,7 @@ def process_folder(folder_path):
         # At this point, temp_dir will be deleted automatically
     return results
 
-def save_results_to_csv(results, output_csv_path, subject_name):
+def save_results_to_csv(results, output_csv_path, subject_name, target_words):
     """
     Saves the transcription results to a CSV file.
     Adds columns for File Name, Subject, Condition, Word Count, and each target word.
@@ -154,7 +151,7 @@ def save_results_to_csv(results, output_csv_path, subject_name):
     with open(output_csv_path, mode="w", newline="") as csv_file:
         writer = csv.writer(csv_file)
         # Write header row
-        writer.writerow(["File Name", "Subject", "Condition", "Word Count"] + TARGET_WORDS)
+        writer.writerow(["File Name", "Subject", "Condition", "Word Count"] ) #+ target_words)
 
         # Write rows for each file, sorted by file name
         for file_name in sorted(results.keys()):  # Sort file names alphabetically
@@ -171,85 +168,29 @@ def save_results_to_csv(results, output_csv_path, subject_name):
                 condition = "unknown"
 
             # Create a dictionary to store the order of each target word
-            word_positions = {word: [] for word in TARGET_WORDS}
-            for index, word in enumerate(word_order, start=1):
-                if word in TARGET_WORDS:
-                    word_positions[word].append(index)
+            #word_positions = {word: [] for word in target_words}
+            #for index, word in enumerate(word_order, start=1):
+            #    if word in target_words:
+            #        word_positions[word].append(index)
 
             # Flatten the word positions into a single row
             row = [file_name, subject_name, condition, unique_word_count]
-            for word in TARGET_WORDS:
-                row.append(",".join(map(str, word_positions[word])) if word_positions[word] else "")
+            #for word in target_words:
+            #    row.append(",".join(map(str, word_positions[word])) if word_positions[word] else "")
 
             writer.writerow(row)
 
-def export_to_excel_with_colors(input_path, output_path):
-    # Define the column colors
-    column_colors = {
-        "drum": ("FFCCCC", "CC6666"),
-        "curtain": ("FFCCCC", "CC6666"),
-        "bell": ("CCFFCC", "66CC66"),
-        "coffee": ("CCFFCC", "66CC66"),
-        "school": ("CCCCFF", "6666CC"),
-        "parent": ("CCCCFF", "6666CC"),
-        "moon": ("CCCCFF", "6666CC"),
-        "garden": ("CCCCFF", "6666CC"),
-        "hat": ("FFFFCC", "CCCC66"),
-        "farmer": ("FFFFCC", "CCCC66"),
-        "nose": ("FFFFCC", "CCCC66"),
-        "turkey": ("FFFFCC", "CCCC66"),
-        "color": ("FFCCFF", "CC66CC"),
-        "house": ("FFCCFF", "CC66CC"),
-        "river": ("CCCCCC", "666666"),
-    }
-
-    # Read the CSV file, keeping "NA" as string
-    df = pd.read_csv(input_path, keep_default_na=False, na_values=[])
-
-    # Create a new workbook
-    wb = Workbook()
-    ws = wb.active
-
-    # Write the DataFrame to the worksheet
-    for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), 1):
-        ws.append(row)
-
-    # Apply the colors to the columns
-    for col in df.columns:
-        if col in column_colors:
-            data_fill = PatternFill(start_color=column_colors[col][0],
-                                  end_color=column_colors[col][0],
-                                  fill_type="solid")
-            header_fill = PatternFill(start_color=column_colors[col][1],
-                                    end_color=column_colors[col][1],
-                                    fill_type="solid")
-
-            # Color the header
-            header_cell = ws.cell(row=1, column=df.columns.get_loc(col)+1)
-            header_cell.fill = header_fill
-
-            # Color the data cells
-            for row in range(2, ws.max_row + 1):
-                cell = ws.cell(row=row, column=df.columns.get_loc(col)+1)
-                cell.fill = data_fill
-
-    # Save the workbook
-    wb.save(output_path)
-    print(f"Colored Excel file saved to {output_path}")
-
 def main():
-    folder_path = '//Users//maaymadar//Downloads//list 1 - mismatch 11-6-25'
-    subject_number = "1"
+    folder_path = '//Users//maaymadar//Downloads//subject 1//list 1 - mismatch 11-6-25'
+    subject_number = folder_path.lower().split("subject")[1].split("/")[0].strip()
     subject_name = f"Subject_{subject_number}"
     output_csv_path = f"{folder_path}/{subject_name}.csv"
-    output_excel_path = f"{folder_path}/{subject_name}_colored.xlsx"
 
-    results = process_folder(folder_path)
-    save_results_to_csv(results, output_csv_path, subject_number)
+    target_words = TARGET_WORDS_LIST_1 if "list 1" in folder_path.lower() else TARGET_WORDS_LIST_2
+
+    results = process_folder(folder_path, target_words)
+    save_results_to_csv(results, output_csv_path, subject_number, target_words)
     print(f"Results saved to {output_csv_path}")
-
-    # Export results to Excel with colors
-    export_to_excel_with_colors(output_csv_path, output_excel_path)
 
 if __name__ == "__main__":
     main()
