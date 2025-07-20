@@ -9,6 +9,7 @@ from moviepy import AudioFileClip
 from deepgram import DeepgramClient, PrerecordedOptions
 
 DEEPGRAM_API_KEY = "0621d176ddc509704a86222ef09ef360933d086a"
+WRITE_WORD_ORDER = True  # Set to True to write word order in the CSV
 
 # List of target words
 TARGET_WORDS_LIST_1= ["drum", "curtain", "bell", "coffee", "school", "parent",
@@ -151,7 +152,11 @@ def save_results_to_csv(results, output_csv_path, subject_name, target_words):
     with open(output_csv_path, mode="w", newline="") as csv_file:
         writer = csv.writer(csv_file)
         # Write header row
-        writer.writerow(["File Name", "Subject", "Condition", "Word Count"] ) #+ target_words)
+
+        if WRITE_WORD_ORDER:
+            writer.writerow(["File Name", "Subject", "List Number", "Condition", "Word Count"] + target_words)
+        else:
+            writer.writerow(["File Name", "Subject", "List Number", "Condition", "Word Count"])
 
         # Write rows for each file, sorted by file name
         for file_name in sorted(results.keys()):  # Sort file names alphabetically
@@ -167,16 +172,17 @@ def save_results_to_csv(results, output_csv_path, subject_name, target_words):
             else:
                 condition = "unknown"
 
-            # Create a dictionary to store the order of each target word
-            #word_positions = {word: [] for word in target_words}
-            #for index, word in enumerate(word_order, start=1):
-            #    if word in target_words:
-            #        word_positions[word].append(index)
+            if WRITE_WORD_ORDER:
+                # Create a dictionary to store the order of each target word
+                word_positions = {word: [] for word in target_words}
+                for index, word in enumerate(word_order, start=1):
+                    if word in target_words:
+                        word_positions[word].append(index)
 
-            # Flatten the word positions into a single row
-            row = [file_name, subject_name, condition, unique_word_count]
-            #for word in target_words:
-            #    row.append(",".join(map(str, word_positions[word])) if word_positions[word] else "")
+                # Flatten the word positions into a single row
+                row = [file_name, subject_name, condition, unique_word_count]
+                for word in target_words:
+                    row.append(",".join(map(str, word_positions[word])) if word_positions[word] else "")
 
             writer.writerow(row)
 
