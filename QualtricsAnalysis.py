@@ -181,14 +181,16 @@ def save_results_to_csv(results, output_csv_path, subject_name, target_words):
             writer.writerow(row)
 
 def main():
-    folder_path = '//Users//maaymadar//Downloads//subject 1//list 1 - mismatch 11-6-25'
-    subject_number = folder_path.lower().split("subject")[1].split("/")[0].strip()
+    folder_path = r"C:\Users\maayanmad\Documents\shlomi\Subject 2\List 1 - mismatch"
+    normalized_path = folder_path.replace("\\", "/")
+
+    subject_number = normalized_path.lower().split("subject")[1].split("/")[0].strip()
     subject_name = f"Subject_{subject_number}"
-    output_csv_path = f"{folder_path}/{subject_name}.csv"
+    output_csv_path = f"{normalized_path}/{subject_name}.csv"
 
-    target_words = TARGET_WORDS_LIST_1 if "list 1" in folder_path.lower() else TARGET_WORDS_LIST_2
+    target_words = TARGET_WORDS_LIST_1 if "list 1" in normalized_path.lower() else TARGET_WORDS_LIST_2
 
-    results = process_folder(folder_path, target_words)
+    results = process_folder(normalized_path, target_words)
     save_results_to_csv(results, output_csv_path, subject_number, target_words)
     print(f"Results saved to {output_csv_path}")
 
