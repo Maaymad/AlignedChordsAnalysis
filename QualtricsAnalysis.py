@@ -172,6 +172,14 @@ def save_results_to_csv(results, output_csv_path, subject_name, target_words):
             else:
                 condition = "unknown"
 
+            # Determine list number based on folder name
+            if "list 1" in output_csv_path.lower():
+                list_number = "1"
+            elif "list 2" in output_csv_path.lower():
+                list_number = "2"
+            else:
+                list_number = "unknown"
+
             if WRITE_WORD_ORDER:
                 # Create a dictionary to store the order of each target word
                 word_positions = {word: [] for word in target_words}
@@ -180,7 +188,7 @@ def save_results_to_csv(results, output_csv_path, subject_name, target_words):
                         word_positions[word].append(index)
 
                 # Flatten the word positions into a single row
-                row = [file_name, subject_name, condition, unique_word_count]
+                row = [file_name, subject_name, list_number, condition, unique_word_count]
                 for word in target_words:
                     row.append(",".join(map(str, word_positions[word])) if word_positions[word] else "")
 
