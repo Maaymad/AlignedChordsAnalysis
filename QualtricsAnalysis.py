@@ -16,9 +16,9 @@ TARGET_WORDS_LIST_1= ["drum", "curtain", "bell", "coffee", "school", "parent",
                 "moon", "garden", "hat", "farmer", "nose", "turkey",
                 "color", "house", "river"]
 
-TARGET_WORDS_LIST_2 = ["drum", "curtain", "bell", "coffee", "school", "parent",
-                "moon", "garden", "hat", "farmer", "nose", "turkey",
-                "color", "house", "river"]
+TARGET_WORDS_LIST_2 = ["desk", "ranger", "bird", "shoe", "stove", "mountain",
+                "glasses", "towel", "cloud", "boat", "lamb", "gun",
+                "pencil", "church", "fish"]
 
 #function that recives a file, checks the type of the file and converts it to mp3 if it is a webm or mp4 or m4a
 def convert_audio_to_wav(file, temp_dir):
